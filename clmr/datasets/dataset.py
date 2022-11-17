@@ -39,6 +39,9 @@ class Dataset(TorchDataset):
         target_fp = self.target_file_path(n)
         try:
             audio, sample_rate = torchaudio.load(target_fp)
+            # if audio has more than 1 channel, make them mono
+            if audio.shape[0] > 1:
+                audio = audio.mean(0)[None]
         except OSError as e:
             print("File not found, try running `python preprocess.py` first.\n\n", e)
             return

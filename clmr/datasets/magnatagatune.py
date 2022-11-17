@@ -8,10 +8,10 @@ from collections import defaultdict
 from typing import Any, Tuple, Optional
 from tqdm import tqdm
 
-import soundfile as sf
+# import soundfile as sf
 import torchaudio
 
-torchaudio.set_audio_backend("soundfile")
+# torchaudio.set_audio_backend("soundfile")
 from torch import Tensor, FloatTensor
 from torchaudio.datasets.utils import (
     download_url,

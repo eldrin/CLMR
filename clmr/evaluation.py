@@ -1,3 +1,5 @@
+from typing import Optional
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -8,7 +10,7 @@ from sklearn import metrics
 
 def evaluate(
     encoder: nn.Module,
-    finetuned_head: nn.Module,
+    finetuned_head: Optional[nn.Module],
     test_dataset: Dataset,
     dataset_name: str,
     audio_length: int,

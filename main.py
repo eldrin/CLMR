@@ -7,36 +7,53 @@ from torch.utils.data import DataLoader
 
 # Audio Augmentations
 from torchaudio_augmentations import (
-    RandomApply,
+    # RandomApply,
     ComposeMany,
     RandomResizedCrop,
-    PolarityInversion,
-    Noise,
-    Gain,
-    HighLowPass,
-    Delay,
-    PitchShift,
-    Reverb,
+    # PolarityInversion,
+    # Noise,
+    # Gain,
+    # HighLowPass,
+    # Delay,
+    # PitchShift,
+    # Reverb,
 )
 
 from clmr.data import ContrastiveDataset
 from clmr.datasets import get_dataset
 from clmr.evaluation import evaluate
-from clmr.models import SampleCNN
+from clmr.models import SampleCNNS, SampleCNN
 from clmr.modules import ContrastiveLearning, SupervisedLearning
 from clmr.utils import yaml_config_hook
 
 
+MODEL_CLASSES = {
+    'small': SampleCNNS,
+    'basic': SampleCNN
+}
+
+
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser(description="CLMR")
+    parser = argparse.ArgumentParser(description="CLMR", add_help=False)
     parser = Trainer.add_argparse_args(parser)
 
-    config = yaml_config_hook("./config/config.yaml")
-    for k, v in config.items():
-        parser.add_argument(f"--{k}", default=v, type=type(v))
+    parser0 = argparse.ArgumentParser(parents=[parser])
+    parser0.add_argument('config_fn', type=str,
+                         help="the filename of the extraction configration file")
+    parser0.add_argument('-m', '--model-type', type=str, default='small',
+                         choices=MODEL_CLASSES.keys(),
+                         help=("size of the model class that is used for "
+                               "the feature extraction."))
+    parser0.add_argument('-p', '--path', type=str, default='./',
+                         help="the path where the result is stored.")
+    args = parser0.parse_args()
 
-    args = parser.parse_args()
+    config = yaml_config_hook(args.config_fn)
+    for k, v in config.items():
+        parser0.add_argument(f"--{k}", default=v, type=type(v))
+
+    args = parser0.parse_args()
     pl.seed_everything(args.seed)
 
     # ------------
@@ -48,25 +65,25 @@ if __name__ == "__main__":
     else:
         train_transform = [
             RandomResizedCrop(n_samples=args.audio_length),
-            RandomApply([PolarityInversion()], p=args.transforms_polarity),
-            RandomApply([Noise()], p=args.transforms_noise),
-            RandomApply([Gain()], p=args.transforms_gain),
-            RandomApply(
-                [HighLowPass(sample_rate=args.sample_rate)], p=args.transforms_filters
-            ),
-            RandomApply([Delay(sample_rate=args.sample_rate)], p=args.transforms_delay),
-            RandomApply(
-                [
-                    PitchShift(
-                        n_samples=args.audio_length,
-                        sample_rate=args.sample_rate,
-                    )
-                ],
-                p=args.transforms_pitch,
-            ),
-            RandomApply(
-                [Reverb(sample_rate=args.sample_rate)], p=args.transforms_reverb
-            ),
+            # RandomApply([PolarityInversion()], p=args.transforms_polarity),
+            # RandomApply([Noise()], p=args.transforms_noise),
+            # RandomApply([Gain()], p=args.transforms_gain),
+            # RandomApply(
+            #     [HighLowPass(sample_rate=args.sample_rate)], p=args.transforms_filters
+            # ),
+            # RandomApply([Delay(sample_rate=args.sample_rate)], p=args.transforms_delay),
+            # RandomApply(
+            #     [
+            #         PitchShift(
+            #             n_samples=args.audio_length,
+            #             sample_rate=args.sample_rate,
+            #         )
+            #     ],
+            #     p=args.transforms_pitch,
+            # ),
+            # RandomApply(
+            #     [Reverb(sample_rate=args.sample_rate)], p=args.transforms_reverb
+            # ),
         ]
         num_augmented_samples = 2
 
@@ -77,7 +94,7 @@ if __name__ == "__main__":
     valid_dataset = get_dataset(args.dataset, args.dataset_dir, subset="valid")
     contrastive_train_dataset = ContrastiveDataset(
         train_dataset,
-        input_shape=(1, args.audio_length),
+        input_shape=[1, args.audio_length],
         transform=ComposeMany(
             train_transform, num_augmented_samples=num_augmented_samples
         ),
@@ -85,7 +102,7 @@ if __name__ == "__main__":
 
     contrastive_valid_dataset = ContrastiveDataset(
         valid_dataset,
-        input_shape=(1, args.audio_length),
+        input_shape=[1, args.audio_length],
         transform=ComposeMany(
             train_transform, num_augmented_samples=num_augmented_samples
         ),
@@ -110,7 +127,7 @@ if __name__ == "__main__":
     # ------------
     # encoder
     # ------------
-    encoder = SampleCNN(
+    encoder = MODEL_CLASSES[args.model_type](
         strides=[3, 3, 3, 3, 3, 3, 3, 3, 3],
         supervised=args.supervised,
         out_dim=train_dataset.n_classes,
@@ -124,7 +141,14 @@ if __name__ == "__main__":
     else:
         module = ContrastiveLearning(args, encoder)
 
-    logger = TensorBoardLogger("runs", name="CLMRv2-{}".format(args.dataset))
+    logger_name = (
+        "CLMRv2{model_type}-{dataset}"
+        .format(
+            model_type = 'S' if args.model_type == 'small' else '',
+            dataset = args.dataset
+        )
+    )
+    logger = TensorBoardLogger("runs", name=logger_name)
     if args.checkpoint_path:
         module = module.load_from_checkpoint(
             args.checkpoint_path, encoder=encoder, output_dim=train_dataset.n_classes
@@ -156,7 +180,7 @@ if __name__ == "__main__":
 
         contrastive_test_dataset = ContrastiveDataset(
             test_dataset,
-            input_shape=(1, args.audio_length),
+            input_shape=[1, args.audio_length],
             transform=None,
         )
 
